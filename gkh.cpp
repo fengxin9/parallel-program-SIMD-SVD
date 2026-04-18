@@ -6,6 +6,7 @@
 #include <limits>
 #include <stdexcept>
 #include <vector>
+#include <arm_neon.h>
 
 namespace
 {
@@ -23,7 +24,30 @@ namespace
     // 这类逐元素线性组合很适合向量化，SIMD/多线程中你也可以顺手的事把他们做了。
     static void apply_left_rows(Matrix &M, int r0, int r1, double c, double s)
     {
-        for (int j = 0; j < M.cols(); ++j)
+        int cols = M.cols();
+        float64x2_t simd_c = vdupq_n_f64(c);
+        float64x2_t simd_s = vdupq_n_f64(s);
+        float64x2_t neg_simd_s = vnegq_f64(simd_s);
+        
+        int j = 0;
+        for (; j + 1 < cols; j += 2)   // 一次处理2列
+        {
+            float64x2_t a = vld1q_f64(&M.at(r0, j));
+            float64x2_t b = vld1q_f64(&M.at(r1, j));
+            
+            // new_a = c * a + s * b
+            // 使用vmlaq_f64融合乘加指令，先计算simd_s*b，再加simd_c*a
+            float64x2_t new_a = vfmaq_f64(vmulq_f64(simd_s, b), simd_c, a);
+            
+            // new_b = -s * a + c * b
+            float64x2_t new_b = vfmaq_f64(vmulq_f64(neg_simd_s, a), simd_c, b);
+            
+            // 存储结果
+            vst1q_f64(&M.at(r0, j), new_a);
+            vst1q_f64(&M.at(r1, j), new_b);
+        }
+     
+        for (; j < cols; ++j)    // 处理剩余列
         {
             double a = M.at(r0, j);
             double b = M.at(r1, j);
@@ -36,12 +60,33 @@ namespace
     // 即 M <- M * R，其中 R 只作用在第 c0/c1 两列上。
     static void apply_right_cols(Matrix &M, int c0, int c1, double c, double s)
     {
-        for (int i = 0; i < M.rows(); ++i)
+        int rows = M.rows();
+        float64x2_t simd_c = vdupq_n_f64(c);
+        float64x2_t simd_s = vdupq_n_f64(s);
+        float64x2_t neg_simd_s = vnegq_f64(simd_s);
+        
+        int j = 0;
+        for (; j + 1 < rows; j += 2)   
         {
-            double a = M.at(i, c0);
-            double b = M.at(i, c1);
-            M.at(i, c0) = a * c - b * s;
-            M.at(i, c1) = a * s + b * c;
+            float64x2_t a = vld1q_f64(&M.at(j, c0));
+            float64x2_t b = vld1q_f64(&M.at(j, c1));
+            
+            // new_a = a * c + b * (-s)
+            float64x2_t new_a = vfmaq_f64 (vmulq_f64(a, simd_c), vneg_simd_s, b);  
+            
+            // new_b = a * s + b * c
+            float64x2_t new_b = vfmaq_f64(vmulq_f64(a, simd_s), simd_c, b);
+            
+            vst1q_f64(&M.at(j, c0), new_a);
+            vst1q_f64(&M.at(j, c1), new_b);
+        }
+        
+        for (; j < rows; ++j)    // 处理剩余行
+        {
+            double a = M.at(j, c0);
+            double b = M.at(j, c1);
+            M.at(j, c0) = a * c - b * s;
+            M.at(j, c1) = a * s + b * c;
         }
     }
 
