@@ -60,33 +60,12 @@ namespace
     // 即 M <- M * R，其中 R 只作用在第 c0/c1 两列上。
     static void apply_right_cols(Matrix &M, int c0, int c1, double c, double s)
     {
-        int rows = M.rows();
-        float64x2_t simd_c = vdupq_n_f64(c);
-        float64x2_t simd_s = vdupq_n_f64(s);
-        float64x2_t neg_simd_s = vnegq_f64(simd_s);
-        
-        int j = 0;
-        for (; j + 1 < rows; j += 2)   
+        for (int i = 0; i < M.rows(); ++i)
         {
-            float64x2_t a = vld1q_f64(&M.at(j, c0));
-            float64x2_t b = vld1q_f64(&M.at(j, c1));
-            
-            // new_a = a * c + b * (-s)
-            float64x2_t new_a = vfmaq_f64 (vmulq_f64(a, simd_c), vneg_simd_s, b);  
-            
-            // new_b = a * s + b * c
-            float64x2_t new_b = vfmaq_f64(vmulq_f64(a, simd_s), simd_c, b);
-            
-            vst1q_f64(&M.at(j, c0), new_a);
-            vst1q_f64(&M.at(j, c1), new_b);
-        }
-        
-        for (; j < rows; ++j)    // 处理剩余行
-        {
-            double a = M.at(j, c0);
-            double b = M.at(j, c1);
-            M.at(j, c0) = a * c - b * s;
-            M.at(j, c1) = a * s + b * c;
+            double a = M.at(i, c0);
+            double b = M.at(i, c1);
+            M.at(i, c0) = a * c - b * s;
+            M.at(i, c1) = a * s + b * c;
         }
     }
 
