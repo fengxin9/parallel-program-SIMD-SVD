@@ -60,7 +60,34 @@ namespace
     // 即 M <- M * R，其中 R 只作用在第 c0/c1 两列上。
     static void apply_right_cols(Matrix &M, int c0, int c1, double c, double s)
     {
-        for (int i = 0; i < M.rows(); ++i)
+        int rows = M.rows();
+        int i = 0;
+        // 四路循环展开
+        for (; i + 3 < rows; i += 4)
+        {
+            double a0 = M.at(i, c0);
+            double b0 = M.at(i, c1);
+            M.at(i, c0) = a0 * c - b0 * s;
+            M.at(i, c1) = a0 * s + b0 * c;
+            
+            double a1 = M.at(i + 1, c0);
+            double b1 = M.at(i + 1, c1);
+            M.at(i + 1, c0) = a1 * c - b1 * s;
+            M.at(i + 1, c1) = a1 * s + b1 * c;
+            
+            double a2 = M.at(i + 2, c0);
+            double b2 = M.at(i + 2, c1);
+            M.at(i + 2, c0) = a2 * c - b2 * s;
+            M.at(i + 2, c1) = a2 * s + b2 * c;
+            
+            double a3 = M.at(i + 3, c0);
+            double b3 = M.at(i + 3, c1);
+            M.at(i + 3, c0) = a3 * c - b3 * s;
+            M.at(i + 3, c1) = a3 * s + b3 * c;
+        }
+        
+        // 处理剩余行
+        for (; i < rows; ++i)
         {
             double a = M.at(i, c0);
             double b = M.at(i, c1);
